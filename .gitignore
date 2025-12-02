@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+.env/
+
+# Data
+data/
+*.edf
+*.npy
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
