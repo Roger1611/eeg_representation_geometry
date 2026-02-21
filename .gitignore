@@ -22,7 +22,7 @@ experiments/**/logs/
 Thumbs.db
 desktop.ini
 
-*.pth
+#*.pth
 *.pt
 *.ckpt
 
