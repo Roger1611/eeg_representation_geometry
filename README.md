@@ -12,7 +12,7 @@ The project progresses through three experimental stages:
 
 The primary contribution is:
 
-ICRR — Intra-Class Representation Regularization
+ICRR - Intra-Class Representation Regularization
 
 A supervised embedding constraint that promotes intra-class compactness in the latent feature space without modifying model architecture or inference cost.
 
@@ -38,6 +38,7 @@ These experiments are retained for completeness but are not part of the final re
 
 ## Repository Structure
 
+```
 datasets/
 ├── bnci_dataset/
 │   ├── raw/
@@ -51,24 +52,24 @@ datasets/
 experiments/
 ├── stage1_ml_baseline/
 ├── stage2_dl_baseline/
-├── stage3_dl_icrr/
+└── stage3_dl_icrr/
 
 notebooks/
 ├── stage1_ml_baseline/
 ├── stage2_dl_baseline/
-├── stage3_dl_icrr/
+└── stage3_dl_icrr/
 
 results/
 ├── figures/
-├── tables/
+└── tables/
 
 src/
 ├── classical_models.py
 ├── deep_models.py
 ├── preprocessing.py
 ├── data_loading.py
-├── evaluation.py
-
+└── evaluation.py
+```
 ---
 
 ## Experimental Pipeline
@@ -116,9 +117,15 @@ ICRR introduces a supervised embedding constraint to DeepConvNet:
 - Leaves architecture unchanged
 - Adds no additional inference overhead
 
-Loss formulation:
+### Loss Formulation
 
-L_total = L_CE + λ · L_ICRR
+$$
+\mathcal{L}_{\text{total}} 
+= 
+\mathcal{L}_{\text{CE}} 
++ 
+\lambda \, \mathcal{L}_{\text{ICRR}}
+$$
 
 Where:
 
