@@ -119,13 +119,7 @@ ICRR introduces a supervised embedding constraint to DeepConvNet:
 
 ### Loss Formulation
 
-$$
-\mathcal{L}_{\text{total}} 
-= 
-\mathcal{L}_{\text{CE}} 
-+ 
-\lambda \, \mathcal{L}_{\text{ICRR}}
-$$
+`L_total = L_CE + λ · L_ICRR`
 
 Where:
 
