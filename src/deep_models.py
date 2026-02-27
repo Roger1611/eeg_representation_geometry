@@ -1,70 +1,131 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
 
-class EEGDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.long)
 
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
-
-class SimpleEEGNet(nn.Module):
-    def __init__(self, n_classes=2):
+# ----------------------------
+# EEGNet
+# ----------------------------
+class EEGNet(nn.Module):
+    def __init__(self, chans, samples, classes=2):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 16, (1, 10), padding=(0, 5))
-        self.bn1 = nn.BatchNorm2d(16)
 
-        self.conv2 = nn.Conv2d(16, 32, (64, 1))
-        self.bn2 = nn.BatchNorm2d(32)
+        self.first = nn.Sequential(
+            nn.Conv2d(1, 8, (1, 64), padding=(0, 32), bias=False),
+            nn.BatchNorm2d(8),
+            nn.Conv2d(8, 16, (chans, 1), bias=False),
+            nn.BatchNorm2d(16),
+            nn.ELU(),
+            nn.AvgPool2d((1, 4)),
+            nn.Dropout(0.5)
+        )
 
-        self.relu = nn.ReLU()
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(32, n_classes)
+        self.second = nn.Sequential(
+            nn.Conv2d(16, 16, (1, 16), bias=False),
+            nn.BatchNorm2d(16),
+            nn.ELU(),
+            nn.AvgPool2d((1, 8)),
+            nn.Flatten()
+        )
+
+        with torch.no_grad():
+            dummy = torch.zeros(1, 1, chans, samples)
+            feat = self.second(self.first(dummy))
+            dim = feat.shape[1]
+
+        self.classifier = nn.Linear(dim, classes)
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # (B, 1, C, T)
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.pool(x)
-        x = x.flatten(1)
-        return self.fc(x)
+        x = x.unsqueeze(1)
+        x = self.first(x)
+        x = self.second(x)
+        return self.classifier(x)
 
-def train_simple_eegnet(X_train, y_train, X_test, y_test, epochs=50, batch_size=8, lr=1e-3):
-    train_ds = EEGDataset(X_train, y_train)
-    test_ds = EEGDataset(X_test, y_test)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+# ----------------------------
+# DeepConvNet
+# ----------------------------
+class DeepConvNet(nn.Module):
+    def __init__(self, chans, samples, classes=2):
+        super().__init__()
 
-    model = SimpleEEGNet(n_classes=2)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 25, (1, 5)),
+            nn.Conv2d(25, 25, (chans, 1)),
+            nn.BatchNorm2d(25),
+            nn.ELU(),
+            nn.MaxPool2d((1, 2)),
+            nn.Dropout(0.5),
 
-    for _ in range(epochs):
-        model.train()
-        for xb, yb in train_loader:
-            optimizer.zero_grad()
-            out = model(xb)
-            loss = criterion(out, yb)
-            loss.backward()
-            optimizer.step()
+            nn.Conv2d(25, 50, (1, 5)),
+            nn.BatchNorm2d(50),
+            nn.ELU(),
+            nn.MaxPool2d((1, 2)),
+            nn.Dropout(0.5),
 
-    # Evaluation
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for xb, yb in test_loader:
-            out = model(xb)
-            _, preds = torch.max(out, 1)
-            correct += (preds == yb).sum().item()
-            total += yb.size(0)
+            nn.Flatten()
+        )
 
-    acc = correct / total
-    return model, acc
+        with torch.no_grad():
+            dummy = torch.zeros(1, 1, chans, samples)
+            feat = self.features(dummy)
+            dim = feat.shape[1]
+
+        self.classifier = nn.Linear(dim, classes)
+
+    def forward(self, x, return_embedding=False):
+        x = x.unsqueeze(1)
+        emb = self.features(x)
+        logits = self.classifier(emb)
+
+        if return_embedding:
+            return logits, emb
+        return logits
+
+
+# ----------------------------
+# ShallowConvNet
+# ----------------------------
+class ShallowConvNet(nn.Module):
+    def __init__(self, chans, samples, classes=2):
+        super().__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 40, (1, 13)),
+            nn.Conv2d(40, 40, (chans, 1)),
+            nn.BatchNorm2d(40),
+            nn.ELU(),
+            nn.AvgPool2d((1, 35)),
+            nn.Dropout(0.5),
+            nn.Flatten()
+        )
+
+        with torch.no_grad():
+            dummy = torch.zeros(1, 1, chans, samples)
+            feat = self.features(dummy)
+            dim = feat.shape[1]
+
+        self.classifier = nn.Linear(dim, classes)
+
+    def forward(self, x):
+        x = x.unsqueeze(1)
+        x = self.features(x)
+        return self.classifier(x)
+
+
+# ----------------------------
+# Projection Head Wrapper
+# ----------------------------
+class ProjectionHead(nn.Module):
+    def __init__(self, backbone, embedding_dim, proj_dim=128):
+        super().__init__()
+        self.backbone = backbone
+        self.projection = nn.Sequential(
+            nn.Linear(embedding_dim, proj_dim),
+            nn.ReLU(),
+            nn.Linear(proj_dim, proj_dim)
+        )
+
+    def forward(self, x):
+        logits, emb = self.backbone(x, return_embedding=True)
+        proj = self.projection(emb)
+        return logits, emb, proj
